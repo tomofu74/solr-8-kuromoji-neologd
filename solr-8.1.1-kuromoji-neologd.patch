@@ -44,8 +44,8 @@
 + echo "${ECHO_PREFIX} Copy user dictionary resource"
 + SEED_FILE_NAME=mecab-user-dict-seed.${YMD}.csv
 + 
---- ./lucene/analysis/kuromoji/build.xml.ORG	2019-06-07 07:08:57.633574930 +0900
-+++ ./lucene/analysis/kuromoji/build.xml	2019-06-07 07:07:49.901625141 +0900
+--- ./lucene/analysis/kuromoji/build.xml.ORG	2019-06-08 22:30:44.288086004 +0900
++++ ./lucene/analysis/kuromoji/build.xml	2019-06-08 22:30:49.543160309 +0900
 @@ -17,7 +17,7 @@
      limitations under the License.
   -->
