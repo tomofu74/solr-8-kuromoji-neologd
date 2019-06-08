@@ -1,0 +1,183 @@
+--- ./lucene/build.properties.ORG	2019-06-07 07:04:34.472834407 +0900
++++ ./lucene/build.properties	2019-06-06 23:28:49.201166284 +0900
+@@ -0,0 +1,27 @@
++#
++# Licensed to the Apache Software Foundation (ASF) under one or more
++# contributor license agreements.  See the NOTICE file distributed with
++# this work for additional information regarding copyright ownership.
++# The ASF licenses this file to You under the Apache License, Version 2.0
++# (the "License"); you may not use this file except in compliance with
++# the License.  You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++#
++
++# neologd tag. if you want to checkout latest master branch, comment out this.
++# neologd.tag=v0.0.1
++
++# neologd version.
++# it must be set compatible with neologd tag (or master branch).
++# if version is not compatible with neologd tag, build will fail.
++neologd.version=20190530
++
++# do not change this.
++version.suffix=SNAPSHOT-${neologd.version}
+--- ./lucene/analysis/kuromoji/src/tools/patches/solr-8.1.1+mecab-ipadic-neologd.patch.ORG	2019-06-07 07:03:56.177303441 +0900
++++ ./lucene/analysis/kuromoji/src/tools/patches/solr-8.1.1+mecab-ipadic-neologd.patch	2019-06-07 07:00:19.439318761 +0900
+@@ -0,0 +1,13 @@
++--- make-mecab-ipadic-neologd.sh.ORG	2019-06-07 06:47:53.898973274 +0900
+++++ make-mecab-ipadic-neologd.sh	2019-06-07 06:57:29.852961853 +0900
++@@ -227,6 +227,10 @@
++ patch < ${BASEDIR}/../misc/patch/Noun.csv.20170317.diff
++ patch < ${BASEDIR}/../misc/patch/Noun.name.csv.20170317.diff
++ 
+++if [ -f ${BASEDIR}/../../../../../../lucene/analysis/kuromoji/src/tools/patches/Noun.proper.csv.patch ]; then
+++    tail -1 ${BASEDIR}/../../../../../../lucene/analysis/kuromoji/src/tools/patches/Noun.proper.csv.patch | iconv -f euc-jp -t utf-8 | cut -c 2- >> ${NEOLOGD_DIC_DIR}/Noun.proper.csv
+++fi
+++
++ echo "${ECHO_PREFIX} Copy user dictionary resource"
++ SEED_FILE_NAME=mecab-user-dict-seed.${YMD}.csv
++ 
+--- ./lucene/analysis/kuromoji/build.xml.ORG	2019-06-07 07:08:57.633574930 +0900
++++ ./lucene/analysis/kuromoji/build.xml	2019-06-07 07:07:49.901625141 +0900
+@@ -17,7 +17,7 @@
+     limitations under the License.
+  -->
+ 
+-<project name="analyzers-kuromoji" default="default" xmlns:ivy="antlib:org.apache.ivy.ant">
++<project name="analyzers-kuromoji-ipadic-neologd" default="default" xmlns:ivy="antlib:org.apache.ivy.ant">
+ 
+   <description>
+     Japanese Morphological Analyzer
+@@ -34,7 +34,7 @@
+ 
+   <!-- default configuration: uses mecab-ipadic -->
+   <property name="ipadic.type" value="ipadic"/>
+-  <property name="ipadic.version" value="mecab-ipadic-2.7.0-20070801" />
++  <property name="ipadic.version" value="mecab-ipadic-2.7.0-20070801-neologd-${neologd.version}" />
+ 
+   <!-- alternative configuration: uses mecab-naist-jdic
+   <property name="ipadic.type" value="naist"/>
+@@ -43,11 +43,14 @@
+   
+   <property name="dict.src.file" value="${ipadic.version}.tar.gz" />
+   <property name="dict.src.dir" value="${build.dir}/${ipadic.version}" />
+-  <property name="dict.encoding" value="euc-jp"/>
++  <property name="dict.encoding" value="utf-8"/>
+   <property name="dict.format" value="ipadic"/>
+   <property name="dict.normalize" value="false"/>
+   <property name="dict.target.dir" location="${resources.dir}"/>
+ 
++  <!-- properties for neologd -->
++  <property name="repo.neologd" value="https://github.com/neologd/mecab-ipadic-neologd.git"/>
++  <property name="dict.src.neologd" value="${build.dir}/mecab-ipadic-neologd"/>
+ 
+   <available type="dir" file="${build.dir}/${ipadic.version}" property="dict.available"/>
+ 
+@@ -65,10 +68,44 @@
+   </target>
+ 
+   <target name="patch-dict" depends="download-dict">
++    <!--
+     <patch patchfile="src/tools/patches/Noun.proper.csv.patch"
+            originalfile="${dict.src.dir}/Noun.proper.csv"/>
++    -->
++    <exec executable="/bin/sh">
++      <arg value="-c"/>
++      <arg value="tail -1 src/tools/patches/Noun.proper.csv.patch | iconv -f euc-jp -t utf-8 | cut -c 2- >> ${dict.src.dir}/Noun.proper.csv"/>
++    </exec>
+   </target>
+ 
++  <macrodef name = "git">
++    <attribute name = "command" />
++    <attribute name = "dir" default = "" />
++    <element name = "args" optional = "true" />
++    <sequential>
++      <echo message = "git @{command}" />
++      <exec executable = "git" dir = "@{dir}">
++        <arg value = "@{command}" />
++        <args/>
++      </exec>
++    </sequential>
++  </macrodef>
++
++  <macrodef name = "git-clone-pull">
++    <attribute name = "repository" />
++    <attribute name = "dest" />
++    <sequential>
++      <git command = "clone">
++        <args>
++          <arg value = "@{repository}" />
++          <arg value = "@{dest}" />
++        </args>
++      </git>
++      <git command = "pull" dir = "@{dest}" />
++    </sequential>
++  </macrodef>
++
++
+   <path id="tools.dependencies">
+     <fileset dir="../icu/lib"/>
+   </path>
+@@ -86,13 +123,53 @@
+     <pathelement location="${build.dir}/classes/tools-test"/>
+   </path>
+ 
+-  <target name="build-dict" depends="compile-tools, patch-dict">
++  <target name="clone-neologd">
++    <git-clone-pull repository="${repo.neologd}" dest="${dict.src.neologd}"/>
++  </target>
++
++  <target name="pull-neologd">
++    <git command="checkout" dir="${dict.src.neologd}">
++      <args>
++        <arg value="master"/>
++      </args>
++    </git>
++    <git command="pull" dir="${dict.src.neologd}"/>
++    <git command="pull" dir="${dict.src.neologd}">
++      <args>
++        <arg value="--tags"/>
++      </args>
++    </git>
++  </target>
++
++  <target name="checkout-neologd-tag" if="neologd.tag">
++    <git command="checkout" dir="${dict.src.neologd}">
++      <args>
++        <arg value="refs/tags/${neologd.tag}"/>
++      </args>
++    </git>
++  </target>
++
++  <target name="checkout-neologd" depends="pull-neologd, checkout-neologd-tag"/>
++
++  <target name="build-dict-neologd" depends="pull-neologd, checkout-neologd">
++    <patch patchfile="src/tools/patches/solr-8.1.1+mecab-ipadic-neologd.patch"
++	   originalfile="${dict.src.neologd}/libexec/make-mecab-ipadic-neologd.sh"/>
++    <exec executable="${dict.src.neologd}/libexec/make-mecab-ipadic-neologd.sh">
++      <!-- kuromoji does not accept longer than 15 characters for base form -->
++      <arg value="-L 15"/>
++    </exec>
++    <copy todir="${dict.src.dir}">
++      <fileset dir="${dict.src.neologd}/build/${ipadic.version}"/>
++    </copy>
++  </target>
++
++  <target name="build-dict" depends="compile-tools, build-dict-neologd">
+     <sequential>
+       <delete verbose="true">
+         <fileset dir="${resources.dir}/org/apache/lucene/analysis/ja/dict" includes="**/*"/>
+       </delete>
+       <!-- TODO: optimize the dictionary construction a bit so that you don't need 1G -->
+-      <java fork="true" failonerror="true" maxmemory="1g" classname="org.apache.lucene.analysis.ja.util.DictionaryBuilder">
++      <java fork="true" failonerror="true" maxmemory="5g" classname="org.apache.lucene.analysis.ja.util.DictionaryBuilder">
+         <classpath>
+           <path refid="tools.classpath"/>
+         </classpath>
