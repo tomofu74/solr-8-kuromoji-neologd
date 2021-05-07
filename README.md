@@ -50,5 +50,5 @@ Apache Solr 8.1.1及び8.5.2で動作確認をしたものを置いてありま�
 lucene-analyzers-kuromoji-ipadic-neologd-<lucene version>-SNAPSHOT-<creation date of neologd>.jar
 ```
 
-7. インストールは、solr を一旦停止して、 7. の jarファイル を solr webアプリのディレクトリの　WEB-INF/lib の下にコピーして、original の kuromoji を排除。
-8. solr をリスタート。
+8. インストールは、solr を一旦停止して、 7. の jarファイル を solr webアプリのディレクトリの　WEB-INF/lib の下にコピーして、original の kuromoji を排除。
+9. solr をリスタート。
